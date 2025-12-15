@@ -27,7 +27,7 @@ pipeline {
         stage('Static Code Analysis') {
             environment {
                 // !!! IMPORTANT: Replace <SONAR_IP> with your actual SonarQube IP address
-                SONAR_HOST_URL = 'http://<SONAR_IP>:9000' 
+                SONAR_HOST_URL = 'http://100.30.218.158:9000' 
             }
             steps {
                 withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {

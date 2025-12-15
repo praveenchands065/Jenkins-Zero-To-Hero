@@ -44,7 +44,7 @@ pipeline {
             steps {
                 script {
                     // This uses the 'docker' binary available in the container (via socket mount)
-                    sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && docker build -t ${DOCKER_IMAGE} .'
+                    def dockerImage = docker.build("${DOCKER_IMAGE}", "java-maven-sonar-argocd-helm-k8s/spring-boot-app")
                     def dockerImage = docker.image("${DOCKER_IMAGE}")
                     docker.withRegistry('index.docker.io', "docker-cred") {
                         dockerImage.push()

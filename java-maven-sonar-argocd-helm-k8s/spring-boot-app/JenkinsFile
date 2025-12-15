@@ -30,15 +30,20 @@ pipeline {
 }
   
        stage('Static Code Analysis') {
-      environment {
-        SONAR_URL = "http://100.30.218.158:9000/"
-      }
-      steps {
-        withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
-          sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn sonar:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=${SONAR_URL}'
-        }
-      }
+  environment {
+    SONAR_URL = "http://YOUR_SONAR_IP:9000"
+  }
+  steps {
+    withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
+      sh '''
+        cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+        mvn sonar:sonar \
+          -Dsonar.host.url=$SONAR_URL \
+          -Dsonar.login=$SONAR_AUTH_TOKEN
+      '''
     }
+  }
+}
     
     stage('Build and Push Docker Image') {
       environment {

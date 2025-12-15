@@ -19,6 +19,15 @@ pipeline {
         sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn clean package'
       }
     }
+    stage('Test Sonar Connectivity') {
+  steps {
+    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_AUTH_TOKEN')]) {
+      sh '''
+        curl -u $SONAR_AUTH_TOKEN: http://100.30.218.158:9000/api/system/status
+      '''
+    }
+  }
+}
   
        stage('Static Code Analysis') {
       environment {

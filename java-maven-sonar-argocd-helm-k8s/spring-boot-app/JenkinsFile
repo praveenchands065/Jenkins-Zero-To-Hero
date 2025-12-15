@@ -1,33 +1,44 @@
 pipeline {
-    agent {
-        docker {
-            image 'maven:3.9.6-eclipse-temurin-17'
-            // This line is crucial for accessing the host's Docker daemon later in the "Build and Push Docker Image" stage
-            args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
-        }
-    }
+    // Run the overall pipeline on the base Jenkins executor (the host VM/Node)
+    // Assumes 'docker' and 'git' CLIs are installed on the Jenkins host machine.
+    agent any
 
     stages {
         stage('Checkout') {
             steps {
-                sh 'echo Repository checked out successfully within the Docker container' 
+                sh 'echo Repository checked out successfully on the host machine'
             }
         }
         
         stage('Build and Test') {
             steps {
-                sh 'ls -ltr'
-                sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn clean package'
+                // Ensure clean state on host before running container to avoid file locks
+                sh 'rm -rf java-maven-sonar-argocd-helm-k8s/spring-boot-app/target'
+
+                script {
+                    // This uses the maven container to run mvn commands
+                    docker.image('maven:3.9.6-eclipse-temurin-17').inside {
+                        sh 'ls -ltr'
+                        sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn clean package'
+                    }
+                }
             }
         }
 
         stage('Static Code Analysis') {
             environment {
+                // IMPORTANT: Ensure this IP is correct and reachable from your Jenkins host/network
                 SONAR_HOST_URL = 'http://100.30.218.158:9000' 
             }
             steps {
-                withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
-                    sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=$SONAR_HOST_URL'
+                script {
+                    // Run Sonar analysis inside the Maven container environment
+                    docker.image('maven:3.9.6-eclipse-temurin-17').inside {
+                        withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
+                            // Command consolidated to a single line for compatibility
+                            sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=$SONAR_HOST_URL'
+                        }
+                    }
                 }
             }
         }
@@ -38,9 +49,9 @@ pipeline {
             }
             steps {
                 script {
-                    // Corrected to a single definition of dockerImage using docker.build()
+                    // Use the built-in Jenkins Docker DSL for building/pushing images, runs on the 'agent any' host
                     def dockerImage = docker.build("${DOCKER_IMAGE}", "java-maven-sonar-argocd-helm-k8s/spring-boot-app")
-                    
+
                     docker.withRegistry('index.docker.io', "docker-cred") {
                         dockerImage.push()
                     }
@@ -65,7 +76,6 @@ pipeline {
                     git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
                     git commit -m "Update deployment image to version ${BUILD_NUMBER}"
                     
-                    # Corrected the URL here: added missing slash after github.com
                     git push https://${GITHUB_TOKEN}@github.com{GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
                     '''
                 }
@@ -73,6 +83,7 @@ pipeline {
         }
     }
 }
+
 
 
 

@@ -2,13 +2,12 @@ pipeline {
     agent {
         docker {
             image 'maven:3.9.6-eclipse-temurin-17'
-            // Use double quotes (") to allow Groovy to substitute the Jenkins variables
+            // Use double quotes (") to allow Groovy to substitute the Jenkins variables for UID/GID
             args "--user \${USER_ID}:\${GROUP_ID} -v /var/run/docker.sock:/var/run/docker.sock"
         }
     }
-    // ... rest of the pipeline
-}
-   stages {
+
+    stages {
         stage('Checkout') {
             steps {
                 sh 'echo Repository checked out successfully' 
@@ -17,12 +16,12 @@ pipeline {
         
         stage('Build and Test') {
             steps {
-                // We can now confidently use 'mvn clean package' as the user has correct permissions
+                sh 'ls -ltr'
+                // This command should now work without permissions errors
                 sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn clean package'
             }
         }
-        
-        // ... rest of the stages remain the same ...
+
         stage('Static Code Analysis') {
             environment {
                 SONAR_HOST_URL = 'http://100.30.218.158:9000' 
@@ -59,10 +58,13 @@ pipeline {
                     sh '''
                     git config user.email "praveenchands065@gmail.com"
                     git config user.name "praveen chands 065"
+                    
                     BUILD_ID_TAG="${BUILD_NUMBER}" 
                     sed -i "s/replaceImageTag/${BUILD_ID_TAG}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+                    
                     git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
                     git commit -m "Update deployment image to version ${BUILD_NUMBER}"
+                    
                     git push https://${GITHUB_TOKEN}@github.com{GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
                     '''
                 }
@@ -70,5 +72,6 @@ pipeline {
         }
     }
 }
+
 
 

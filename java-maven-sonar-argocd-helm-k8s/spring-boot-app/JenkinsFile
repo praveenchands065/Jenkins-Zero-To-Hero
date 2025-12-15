@@ -2,28 +2,26 @@ pipeline {
     agent {
         docker {
             image 'maven:3.9.6-eclipse-temurin-17'
-            // Removed: args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
-            // Relying on Jenkins server configuration to provide Docker access now
+            // Use Jenkins built-in environment variables to run the container as the same user as the host owns the workspace
+            args "--user \${USER_ID}:\${GROUP_ID} -v /var/run/docker.sock:/var/run/docker.sock"
         }
     }
 
     stages {
         stage('Checkout') {
             steps {
-                sh 'echo Repository checked out successfully within the Docker container' 
+                sh 'echo Repository checked out successfully' 
             }
         }
         
         stage('Build and Test') {
-            // Add a steps block here to run cleanup BEFORE the build steps
             steps {
-                // This command attempts to forcefully remove previous build artifacts before 'mvn clean' runs
-                sh 'rm -rf java-maven-sonar-argocd-helm-k8s/spring-boot-app/target'
-                sh 'ls -ltr'
+                // We can now confidently use 'mvn clean package' as the user has correct permissions
                 sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn clean package'
             }
         }
-       
+        
+        // ... rest of the stages remain the same ...
         stage('Static Code Analysis') {
             environment {
                 SONAR_HOST_URL = 'http://100.30.218.158:9000' 
@@ -41,9 +39,8 @@ pipeline {
             }
             steps {
                 script {
-                    // Use the built-in Jenkins Docker DSL for better integration
-                    def dockerImage = docker.build("${DOCKER_IMAGE}", "java-maven-sonar-argocd-helm-k8s/spring-boot-app")
-
+                    sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && docker build -t ${DOCKER_IMAGE} .'
+                    def dockerImage = docker.image("${DOCKER_IMAGE}")
                     docker.withRegistry('index.docker.io', "docker-cred") {
                         dockerImage.push()
                     }
@@ -60,7 +57,7 @@ pipeline {
                 withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
                     sh '''
                     git config user.email "praveenchands065@gmail.com"
-                    git config user.name "praveenchands065"
+                    git config user.name "praveen chands 065"
                     BUILD_ID_TAG="${BUILD_NUMBER}" 
                     sed -i "s/replaceImageTag/${BUILD_ID_TAG}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
                     git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
@@ -72,4 +69,5 @@ pipeline {
         }
     }
 }
+
 

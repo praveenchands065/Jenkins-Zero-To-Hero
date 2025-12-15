@@ -15,12 +15,15 @@ pipeline {
         }
         
         stage('Build and Test') {
+            // Add a steps block here to run cleanup BEFORE the build steps
             steps {
+                // This command attempts to forcefully remove previous build artifacts before 'mvn clean' runs
+                sh 'rm -rf java-maven-sonar-argocd-helm-k8s/spring-boot-app/target'
                 sh 'ls -ltr'
                 sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn clean package'
             }
         }
-
+       
         stage('Static Code Analysis') {
             environment {
                 SONAR_HOST_URL = 'http://100.30.218.158:9000' 

@@ -2,12 +2,13 @@ pipeline {
     agent {
         docker {
             image 'maven:3.9.6-eclipse-temurin-17'
-            // Use Jenkins built-in environment variables to run the container as the same user as the host owns the workspace
+            // Use double quotes (") to allow Groovy to substitute the Jenkins variables
             args "--user \${USER_ID}:\${GROUP_ID} -v /var/run/docker.sock:/var/run/docker.sock"
         }
     }
-
-    stages {
+    // ... rest of the pipeline
+}
+   stages {
         stage('Checkout') {
             steps {
                 sh 'echo Repository checked out successfully' 

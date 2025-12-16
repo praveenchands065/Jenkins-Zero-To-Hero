@@ -1,85 +1,53 @@
 pipeline {
-    agent any
+  agent {
+    docker {
+      image 'maven:3.9.6-eclipse-temurin-17'
+      args '-v /var/run/docker.sock:/var/run/docker.sock'
+    }
+  }
 
-    options {
-        // Ensures the workspace is cleaned before every build execution
-        // Requires Jenkins Workspace Cleanup Plugin
-        cleanWs() 
+  environment {
+    SONAR_PROJECT_KEY = 'my-java-app'
+  }
+
+  stages {
+
+    stage('Checkout') {
+      steps {
+        git branch: 'main',
+            url: 'https://github.com/praveenchands065/Jenkins-Zero-To-Hero.git'
+      }
     }
 
-    stages {
-        stage('Checkout') {
-            steps {
-                // The actual SCM checkout already happened at the start of the pipeline
-                sh 'echo Workspace is clean, build starting now.'
-            }
-        }
-        
-        stage('Build and Test') {
-            steps {
-                script {
-                    docker.image('maven:3.9.6-eclipse-temurin-17').inside {
-                        sh 'ls -ltr'
-                        // mvn clean package will now run without permission issues as the workspace is fresh
-                        sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn clean package'
-                    }
-                }
-            }
-        }
-
-        stage('Static Code Analysis') {
-            environment {
-                SONAR_HOST_URL = 'http://100.30.218.158:9000' 
-            }
-            steps {
-                script {
-                    docker.image('maven:3.9.6-eclipse-temurin-17').inside {
-                        withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
-                            sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=$SONAR_HOST_URL'
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Build and Push Docker Image') {
-            environment {
-                DOCKER_IMAGE = "abhishekf5/ultimate-cicd:${BUILD_NUMBER}"
-            }
-            steps {
-                script {
-                    def dockerImage = docker.build("${DOCKER_IMAGE}", "java-maven-sonar-argocd-helm-k8s/spring-boot-app")
-
-                    docker.withRegistry('index.docker.io', "docker-cred") {
-                        dockerImage.push()
-                    }
-                }
-            }
-        }
-
-        stage('Update Deployment File') {
-            environment {
-                GIT_REPO_NAME = "Jenkins-Zero-To-Hero"
-                GIT_USER_NAME = "praveenchands065"
-            }
-            steps {
-                withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
-                    sh '''
-                    git config user.email "praveenchands065@gmail.com"
-                    git config user.name "praveenchands065"
-                    
-                    BUILD_ID_TAG="${BUILD_NUMBER}" 
-                    sed -i "s/replaceImageTag/${BUILD_ID_TAG}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-                    
-                    git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-                    git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-                    
-                    git push https://${GITHUB_TOKEN}@github.com{GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
-                    '''
-                }
-            }
-        }
+    stage('Build & Test') {
+      steps {
+        sh '''
+          cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+          mvn clean verify
+        '''
+      }
     }
+
+    stage('SonarQube Analysis') {
+      steps {
+        withSonarQubeEnv('sonarqube') {
+          sh '''
+            cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+            mvn sonar:sonar \
+              -Dsonar.projectKey=$SONAR_PROJECT_KEY
+          '''
+        }
+      }
+    }
+
+    stage('Quality Gate') {
+      steps {
+        timeout(time: 5, unit: 'MINUTES') {
+          waitForQualityGate abortPipeline: true
+        }
+      }
+    }
+  }
 }
 
 
